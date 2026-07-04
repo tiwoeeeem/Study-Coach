@@ -57,11 +57,5 @@ uvicorn gateway_service:app --port 8000
 ## Load Testing
 The repository includes a rigorous load-testing suite (`load_test.py`) that simulates multiple clients connecting concurrently. 
 
-**Latest Benchmark Results** (8 concurrent clients + 3 edge cases):
-- **VAD Latency**: 1.3 ms
-- **LLM Time-To-First-Token**: ~0.5 ms
-- **TTS Generation**: 1.15 s
-- **Edge Cases**: 100% Pass (No memory leaks on Disconnect, Malformed JSON, or Silent streams).
-
 ## Metrics Dashboard
 Navigate to `http://localhost:8000/dashboard` while the server is running to view the live Prometheus metrics parsed into a clean HTML table.
