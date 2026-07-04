@@ -1,9 +1,9 @@
-# 🎙️ Study Voice Coach (Scalable Voice AI Gateway)
+# Study Voice Coach (Scalable Voice AI Gateway)
 
 An ultra-low latency, Highly-Concurrent Voice AI Pipeline designed to act as a conversational study coach. 
 It ingests raw binary audio streams over WebSockets, intelligently chunks the audio using PyTorch Silero VAD, routes the audio to a scalable ZeroMQ worker pool for Speech-To-Text (Faster-Whisper), processes the text through a Groq-powered LLM, and streams the responses back via a Text-To-Speech (Edge-TTS) worker.
 
-## 🏗 Architecture
+## Architecture
 
 The system is built on a **Many-to-Few (M:N) Architecture**. Instead of loading ML models 1:1 for every user (which crashes GPUs/CPUs and wastes memory), this architecture decouples the WebSocket connection handling from the heavy ML inference.
 
@@ -18,13 +18,13 @@ The system is built on a **Many-to-Few (M:N) Architecture**. Instead of loading 
    - The Gateway streams the transcribed text to a Groq LLM (e.g. `llama3-8b-8192`). 
    - It parses sentence clauses in real-time and streams them to the TTS worker to achieve ultra-low Time-To-First-Token (TTFT) latency.
 
-## 🚀 Features
+## Features
 - **Real-Time VAD Chunking**: Accurately detects when the user starts and stops speaking using Silero VAD.
 - **Thread-Safe ML Execution**: Isolated model states per-connection to prevent multi-threading memory corruption on the CPU/GPU.
 - **Prometheus Metrics**: Live metrics dashboard for tracking VAD latency, STT/TTS processing times, and LLM TTFT.
 - **Edge-Case Resilient**: Full ASGI `try-except-finally` hardening prevents hanging workers during sudden client disconnects, malformed JSON configs, or silent clients.
 
-## 💻 Installation & Setup
+## Installation & Setup
 
 1. **Clone & Environment**:
 ```bash
@@ -54,7 +54,7 @@ python tts_worker.py
 uvicorn gateway_service:app --port 8000
 ```
 
-## 🧪 Load Testing
+## Load Testing
 The repository includes a rigorous load-testing suite (`load_test.py`) that simulates multiple clients connecting concurrently. 
 
 **Latest Benchmark Results** (8 concurrent clients + 3 edge cases):
@@ -63,5 +63,5 @@ The repository includes a rigorous load-testing suite (`load_test.py`) that simu
 - **TTS Generation**: 1.15 s
 - **Edge Cases**: 100% Pass (No memory leaks on Disconnect, Malformed JSON, or Silent streams).
 
-## 📊 Metrics Dashboard
+## Metrics Dashboard
 Navigate to `http://localhost:8000/dashboard` while the server is running to view the live Prometheus metrics parsed into a clean HTML table.
