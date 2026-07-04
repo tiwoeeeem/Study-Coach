@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+websockets
+silero-vad
+faster-whisper
+groq
+torch
+torchaudio
+numpy
+parler-tts
+transformers
+edge-tts
+pydub
+pyzmq
+prometheus-client

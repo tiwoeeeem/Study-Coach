@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Logs and Data
+*.log
+*.pcm
+*.wav
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store

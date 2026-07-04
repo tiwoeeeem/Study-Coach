@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice AI Latency Logs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f9fafb;
+            color: #111827;
+            margin: 0;
+            padding: 40px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .status {
+            font-size: 0.875rem;
+            color: #059669;
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+        }
+
+        .status::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .table-container {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 12px 24px;
+            font-size: 0.875rem;
+        }
+
+        th {
+            background-color: #f3f4f6;
+            color: #4b5563;
+            font-weight: 600;
+            border-bottom: 1px solid #e5e7eb;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            border-bottom: 1px solid #e5e7eb;
+            color: #374151;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background-color: #f9fafb;
+        }
+
+        .pending {
+            color: #9ca3af;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Interaction Latency Logs</h1>
+        <div class="status">Live tracking enabled</div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Turn</th>
+                    <th>VAD Avg (ms)</th>
+                    <th>STT Time (s)</th>
+                    <th>LLM TTFT (ms)</th>
+                    <th>TTS Time (s)</th>
+                </tr>
+            </thead>
+            <tbody id="log-body">
+                <!-- Rows appended dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // State tracking
+        let state = {
+            vad: { count: 0, sum: 0 },
+            stt: { count: 0, sum: 0 },
+            llm: { count: 0, sum: 0 },
+            tts: { count: 0, sum: 0 }
+        };
+
+        let turnCount = 0;
+        let currentRowId = null;
+
+        function extractPrometheusValue(text, metricName) {
+            const sumMatch = text.match(new RegExp(`${metricName}_sum\\s+([\\d\\.]+)`));
+            const countMatch = text.match(new RegExp(`${metricName}_count\\s+([\\d\\.]+)`));
+            
+            if (sumMatch && countMatch) {
+                return {
+                    sum: parseFloat(sumMatch[1]),
+                    count: parseFloat(countMatch[1])
+                };
+            }
+            return null;
+        }
+
+        function createNewRow(turnNumber) {
+            const tbody = document.getElementById('log-body');
+            const tr = document.createElement('tr');
+            tr.id = `turn-${turnNumber}`;
+            tr.innerHTML = `
+                <td>#${turnNumber}</td>
+                <td id="vad-${turnNumber}" class="pending">measuring...</td>
+                <td id="stt-${turnNumber}" class="pending">processing...</td>
+                <td id="llm-${turnNumber}" class="pending">waiting...</td>
+                <td id="tts-${turnNumber}" class="pending">waiting...</td>
+            `;
+            // Prepend so newest is at the top
+            tbody.insertBefore(tr, tbody.firstChild);
+        }
+
+        function updateCell(id, value, isPending = false) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value;
+                el.className = isPending ? 'pending' : '';
+            }
+        }
+
+        async function pollMetrics() {
+            try {
+                const response = await fetch('/metrics');
+                const text = await response.text();
+
+                const vad = extractPrometheusValue(text, 'voiceai_vad_processing_seconds');
+                const stt = extractPrometheusValue(text, 'voiceai_stt_processing_seconds');
+                const llm = extractPrometheusValue(text, 'voiceai_llm_ttft_seconds');
+                const tts = extractPrometheusValue(text, 'voiceai_tts_processing_seconds');
+
+                // Initialize state on first run without generating rows
+                if (state.stt.count === 0 && stt && stt.count > 0) {
+                    state = { vad, stt, llm, tts };
+                    return; // Skip the very first historic dump
+                }
+
+                if (!stt || !llm || !tts || !vad) return;
+
+                // Detect STT completion (Start of a new logical turn)
+                if (stt.count > state.stt.count) {
+                    turnCount++;
+                    currentRowId = turnCount;
+                    createNewRow(currentRowId);
+                    
+                    const deltaSum = stt.sum - state.stt.sum;
+                    const deltaCount = stt.count - state.stt.count;
+                    updateCell(`stt-${currentRowId}`, (deltaSum / deltaCount).toFixed(2));
+                    
+                    // Update VAD average for the chunks processed in this turn
+                    if (vad.count > state.vad.count) {
+                        const vadDeltaSum = vad.sum - state.vad.sum;
+                        const vadDeltaCount = vad.count - state.vad.count;
+                        updateCell(`vad-${currentRowId}`, ((vadDeltaSum / vadDeltaCount) * 1000).toFixed(1));
+                    } else {
+                        updateCell(`vad-${currentRowId}`, "0.0");
+                    }
+                    
+                    state.stt = stt;
+                    state.vad = vad;
+                }
+
+                // Detect LLM completion
+                if (llm.count > state.llm.count && currentRowId) {
+                    const deltaSum = llm.sum - state.llm.sum;
+                    const deltaCount = llm.count - state.llm.count;
+                    updateCell(`llm-${currentRowId}`, ((deltaSum / deltaCount) * 1000).toFixed(0));
+                    state.llm = llm;
+                }
+
+                // Detect TTS completion
+                if (tts.count > state.tts.count && currentRowId) {
+                    const deltaSum = tts.sum - state.tts.sum;
+                    const deltaCount = tts.count - state.tts.count;
+                    updateCell(`tts-${currentRowId}`, (deltaSum / deltaCount).toFixed(2));
+                    state.tts = tts;
+                }
+
+            } catch (err) {
+                console.error("Polling failed", err);
+            }
+        }
+
+        // Poll frequently to catch the cascade of events
+        setInterval(pollMetrics, 250);
+    </script>
+</body>
+</html>
