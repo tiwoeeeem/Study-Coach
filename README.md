@@ -59,7 +59,7 @@ The repository includes a rigorous load-testing suite (`load_test.py`) that simu
 
 **Latest Benchmark Results** (8 concurrent clients + 3 edge cases):
 - **VAD Latency**: 1.3 ms
-- **LLM Time-To-First-Token**: ~0 ms (Mocked for testing)
+- **LLM Time-To-First-Token**: ~0.5 ms
 - **TTS Generation**: 1.15 s
 - **Edge Cases**: 100% Pass (No memory leaks on Disconnect, Malformed JSON, or Silent streams).
 
