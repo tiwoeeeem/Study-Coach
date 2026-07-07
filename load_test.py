@@ -9,9 +9,12 @@ import miniaudio
 from rich.console import Console
 from rich.table import Table
 
+import os
+
 console = Console()
 
-URI = "ws://localhost:8000/ws/audio"
+URI = os.getenv("GATEWAY_WS_URL", "ws://localhost:8000/ws/audio")
+METRICS_URL = os.getenv("GATEWAY_METRICS_URL", "http://localhost:8000/metrics")
 CHUNK_SIZE = 2048
 CHUNK_INTERVAL = 0.064  # 64ms for 2048 bytes at 16kHz 16-bit
 SILENCE_DURATION = 1.5
@@ -119,7 +122,7 @@ async def fetch_metrics():
     """Fetches metrics from the Gateway and prints a beautiful summary."""
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get("http://localhost:8000/metrics") as resp:
+            async with session.get(METRICS_URL) as resp:
                 text = await resp.text()
                 
                 vad = parse_prometheus(text, "voiceai_vad_processing_seconds")
