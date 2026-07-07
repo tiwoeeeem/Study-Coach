@@ -182,7 +182,7 @@ async def llm_processor_task(llm_queue: asyncio.Queue, tts_req_queue: asyncio.Qu
                 stream = dummy_stream()
             else:
                 stream = await groq_client.chat.completions.create(
-                    model="llama3-8b-8192",
+                    model="llama-3.1-8b-instant",
                     messages=messages,
                     stream=True,
                 )
