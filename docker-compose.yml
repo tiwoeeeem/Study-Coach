@@ -5,8 +5,9 @@ services:
       dockerfile: Dockerfile.gateway
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY:-dummy}
       - STT_WORKER_ADDR=tcp://stt-worker:5555
       - TTS_WORKER_ADDR=tcp://tts-worker:5556
     depends_on:
