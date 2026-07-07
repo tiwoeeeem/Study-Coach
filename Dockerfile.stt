@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# System deps for CTranslate2 and ZMQ
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc g++ libzmq3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.stt.txt .
+RUN pip install --no-cache-dir -r requirements.stt.txt
+
+COPY stt_worker.py .
+
+EXPOSE 5555
+
+CMD ["python", "stt_worker.py", "--port", "5555", "--workers", "4"]

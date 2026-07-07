@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+websockets
+numpy
+groq
+pyzmq
+prometheus-client
+packaging

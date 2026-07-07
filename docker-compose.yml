@@ -1,0 +1,48 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-dummy}
+      - STT_WORKER_ADDR=tcp://stt-worker:5555
+      - TTS_WORKER_ADDR=tcp://tts-worker:5556
+    depends_on:
+      stt-worker:
+        condition: service_started
+      tts-worker:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  stt-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.stt
+    expose:
+      - "5555"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import zmq; ctx=zmq.Context(); s=ctx.socket(zmq.REQ); s.connect('tcp://localhost:5555'); s.close(); ctx.term()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  tts-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.tts
+    expose:
+      - "5556"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import zmq; ctx=zmq.Context(); s=ctx.socket(zmq.REQ); s.connect('tcp://localhost:5556'); s.close(); ctx.term()"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s

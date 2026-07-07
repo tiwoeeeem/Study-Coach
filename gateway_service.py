@@ -13,6 +13,8 @@ from prometheus_client import make_asgi_app, Histogram
 
 # Configuration
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+STT_WORKER_ADDR = os.getenv("STT_WORKER_ADDR", "tcp://localhost:5555")
+TTS_WORKER_ADDR = os.getenv("TTS_WORKER_ADDR", "tcp://localhost:5556")
 SAMPLE_RATE = 16000
 VAD_CHUNK_SIZE = 512
 MAX_SPEECH_DURATION_SEC = 5.0
@@ -60,7 +62,8 @@ async def startup_event():
     print("Loading VAD model (Silero)...")
     vad_model, vad_utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
                                       model='silero_vad',
-                                      force_reload=False)
+                                      force_reload=False,
+                                      trust_repo=True)
     
     print("Initializing Groq client...")
     groq_client = AsyncGroq(api_key=GROQ_API_KEY)
@@ -134,7 +137,7 @@ async def stt_client_task(stt_req_queue: asyncio.Queue, llm_queue: asyncio.Queue
     """Sends audio over ZMQ to STT worker and receives transcribed text.
     Forwards the client's model preference as a multi-part message [model, audio]."""
     stt_socket = zmq_context.socket(zmq.REQ)
-    stt_socket.connect("tcp://localhost:5555")
+    stt_socket.connect(STT_WORKER_ADDR)
     
     try:
         while True:
@@ -226,7 +229,7 @@ async def tts_client_task(tts_req_queue: asyncio.Queue, audio_out_queue: asyncio
     """Sends text over ZMQ to TTS worker and receives synthesized audio bytes.
     Forwards the client's voice preference as a multi-part message [voice, text]."""
     tts_socket = zmq_context.socket(zmq.REQ)
-    tts_socket.connect("tcp://localhost:5556")
+    tts_socket.connect(TTS_WORKER_ADDR)
     
     try:
         while True:
