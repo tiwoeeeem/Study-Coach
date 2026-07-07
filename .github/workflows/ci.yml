@@ -18,6 +18,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Create .env for CI
+        run: echo "GROQ_API_KEY=dummy" > .env
+
       - name: Build all services
         run: docker compose build
 
