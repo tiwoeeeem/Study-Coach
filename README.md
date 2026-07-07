@@ -2,14 +2,14 @@
 
 [![CI — Build, Boot & Test](https://github.com/tiwoeeeem/study-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/tiwoeeeem/study-coach/actions/workflows/ci.yml)
 
-An ultra-low latency, Highly-Concurrent Voice AI Pipeline designed to act as a conversational study coach. 
+An ultra-low latency, Highly-Concurrent Voice AI Pipeline designed to act as a conversational study coach.
 It ingests raw binary audio streams over WebSockets, intelligently chunks the audio using PyTorch Silero VAD, routes the audio to a scalable ZeroMQ worker pool for Speech-To-Text (Faster-Whisper), processes the text through a Groq-powered LLM, and streams the responses back via a Text-To-Speech (Edge-TTS) worker.
 
 ## Architecture
 
 The system is built on a **Many-to-Few (M:N) Architecture**. Instead of loading ML models 1:1 for every user (which crashes GPUs/CPUs and wastes memory), this architecture decouples the WebSocket connection handling from the heavy ML inference.
 
-1. **FastAPI Gateway (`gateway_service.py`)**: 
+1. **FastAPI Gateway (`gateway_service.py`)**:
    - Handles 1000s of lightweight WebSocket connections.
    - Runs PyTorch Silero VAD (Voice Activity Detection) natively to chunk raw `.pcm` audio streams by isolating active speech from silence.
    - Forwards audio chunks over ZeroMQ.
@@ -17,10 +17,11 @@ The system is built on a **Many-to-Few (M:N) Architecture**. Instead of loading 
    - `stt_worker.py`: Subscribes to STT jobs using a ZeroMQ `ROUTER` socket. It batches inference through CTranslate2 `faster-whisper`.
    - `tts_worker.py`: Subscribes to TTS jobs, synthezises speech via `edge-tts` and streams bytes back to the gateway.
 3. **LLM Processor**:
-   - The Gateway streams the transcribed text to a Groq LLM (e.g. `llama3-8b-8192`). 
+   - The Gateway streams the transcribed text to a Groq LLM (e.g. `llama3-8b-8192`).
    - It parses sentence clauses in real-time and streams them to the TTS worker to achieve ultra-low Time-To-First-Token (TTFT) latency.
 
 ## Features
+
 - **Real-Time VAD Chunking**: Accurately detects when the user starts and stops speaking using Silero VAD.
 - **Thread-Safe ML Execution**: Isolated model states per-connection to prevent multi-threading memory corruption on the CPU/GPU.
 - **Prometheus Metrics**: Live metrics dashboard for tracking VAD latency, STT/TTS processing times, and LLM TTFT.
@@ -52,6 +53,7 @@ This boots three containers:
 | TTS Worker | `tts-worker` | `5556` (internal) | Edge-TTS via ZeroMQ ROUTER |
 
 To stop everything:
+
 ```bash
 docker compose down
 ```
@@ -61,6 +63,7 @@ docker compose down
 If you prefer running without Docker:
 
 1. **Clone & Environment**:
+
 ```bash
 git clone https://github.com/tiwoeeeem/study-coach.git
 cd study-coach
@@ -70,34 +73,40 @@ pip install -r requirements.txt
 ```
 
 2. **API Keys**:
+
 ```bash
 export GROQ_API_KEY="your-groq-api-key"
 ```
 
 3. **Start the ZeroMQ Workers** (separate terminals):
+
 ```bash
 python stt_worker.py --workers 4 --precision int8
 python tts_worker.py
 ```
 
 4. **Start the API Gateway**:
+
 ```bash
 uvicorn gateway_service:app --port 8000
 ```
 
 ## Load Testing
-The repository includes a rigorous load-testing suite (`load_test.py`) that simulates multiple clients connecting concurrently. 
+
+The repository includes a rigorous load-testing suite (`load_test.py`) that simulates multiple clients connecting concurrently.
 
 ```bash
 pip install -r requirements.test.txt
 python load_test.py
 ```
 
-**Latest Benchmark Results** (8 concurrent clients + 3 edge cases):
-- **VAD Latency**: 1.3 ms
-- **LLM Time-To-First-Token**: ~0 ms (Mocked for testing)
-- **TTS Generation**: 1.15 s
-- **Edge Cases**: 100% Pass (No memory leaks on Disconnect, Malformed JSON, or Silent streams).
+## 📊 Metrics
 
-## 📊 Metrics Dashboard
-Navigate to `http://localhost:8000/dashboard` while the server is running to view the live Prometheus metrics parsed into a clean HTML table.
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Pipeline Stage ┃ Average Latency ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ VAD Chunking Latency │ 4.5 ms │
+│ STT Transcription Round Trip │ 7.94 s │
+│ LLM Time-To-First-Token (TTFT) │ 17 ms │
+│ TTS Generation Round Trip │ 1.11 s │
+└────────────────────────────────┴─────────────────┘
