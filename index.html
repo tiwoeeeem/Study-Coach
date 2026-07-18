@@ -289,7 +289,7 @@
             <div class="status-text" id="statusText">Press the mic to start</div>
 
             <div class="mic-row">
-                <button class="mic-btn disabled" id="micBtn" aria-label="Toggle microphone">
+                <button class="mic-btn" id="micBtn" aria-label="Toggle microphone">
                     <div class="mic-ring"></div>
                     🎤
                 </button>
@@ -536,7 +536,6 @@ function connectWs() {
         };
         ws.send(JSON.stringify(config));
         setStatus('connected');
-        micBtn.classList.remove('disabled');
     };
 
     ws.onmessage = (evt) => {
@@ -554,7 +553,6 @@ function connectWs() {
 
     ws.onclose = () => {
         setStatus('disconnected');
-        micBtn.classList.add('disabled');
         if (isRecording) stopRecording();
     };
 
@@ -681,8 +679,6 @@ function stopRecording() {
 
 // ─── Mic button toggle ──────────────────────────────────────────
 micBtn.addEventListener('click', async () => {
-    if (micBtn.classList.contains('disabled')) return;
-
     if (!isRecording) {
         // Stop any currently playing audio
         activeSourceNodes.forEach(n => { try { n.stop(); } catch(e){} });
