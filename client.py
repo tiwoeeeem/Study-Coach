@@ -35,24 +35,10 @@ CHUNK = 2048
 #   en-IN-PrabhatNeural      (Indian English)
 #
 # Change this to any voice from the list above:
-TTS_VOICE = "en-IN-PrabhatNeural"
-
-# ──────────────────────────────────────────────────
-# STT Model Selection — pick one from the list below
-# ──────────────────────────────────────────────────
-# Model            Params   Accuracy   Speed
-# tiny.en          39M      ★☆☆☆☆      Fastest
-# base.en          74M      ★★☆☆☆      Very fast
-# small.en         244M     ★★★☆☆      Fast
-# medium.en        769M     ★★★★☆      Moderate
-# large-v3         1.5B     ★★★★★      Slow
-# distil-large-v3  756M     ★★★★★      Fast (recommended)
-#
-# NOTE: The STT worker must have this model pre-loaded.
-# Start the worker with:  python stt_worker.py --models distil-large-v3 small.en
-#
-# Change this to any model from the list above:
-STT_MODEL = "base.en"
+# Default TTS Voice
+DEFAULT_TTS_VOICE = "en-IN-PrabhatNeural"
+# Default STT Model
+DEFAULT_STT_MODEL = "base.en"
 
 # Cooldown after playback stops before mic re-enables (seconds).
 # Prevents the mic from catching the tail echo of the last TTS chunk.
@@ -137,7 +123,7 @@ def speaker_thread_fn(stream_out):
         print("[Speaker Thread] Stopped.")
 
 
-async def websocket_loop():
+async def websocket_loop(tts_voice, stt_model):
     """Async loop: bridges mic_queue → WebSocket → speaker_queue."""
     uri = "ws://localhost:8000/ws/audio"
     print(f"Connecting to {uri} ...")
@@ -145,9 +131,9 @@ async def websocket_loop():
     try:
         async with websockets.connect(uri) as ws:
             # Send config as the first message
-            config = json.dumps({"tts_voice": TTS_VOICE, "stt_model": STT_MODEL})
+            config = json.dumps({"tts_voice": tts_voice, "stt_model": stt_model})
             await ws.send(config)
-            print(f"Connected! Voice: {TTS_VOICE} | STT: {STT_MODEL}")
+            print(f"Connected! Voice: {tts_voice} | STT: {stt_model}")
             print("Start speaking...\n")
 
             async def sender():
@@ -203,6 +189,14 @@ async def websocket_loop():
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Study Coach Voice Client")
+    parser.add_argument("--voice", type=str, default=DEFAULT_TTS_VOICE,
+                        help="TTS Voice (e.g. en-US-JennyNeural, en-GB-SoniaNeural, en-IN-PrabhatNeural)")
+    parser.add_argument("--model", type=str, default=DEFAULT_STT_MODEL,
+                        help="STT Model (e.g. base.en, small.en, distil-large-v3)")
+    args = parser.parse_args()
+
     def handle_signal(sig, frame):
         print("\nShutting down...")
         shutdown_event.set()
@@ -229,7 +223,7 @@ def main():
     speaker.start()
 
     try:
-        asyncio.run(websocket_loop())
+        asyncio.run(websocket_loop(args.voice, args.model))
     except KeyboardInterrupt:
         pass
     finally:
