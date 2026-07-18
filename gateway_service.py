@@ -77,7 +77,8 @@ async def startup_event():
     zmq_context = zmq.asyncio.Context()
     print("Gateway ready to receive WebSockets.")
 
-async def vad_processor_task(audio_in_queue: asyncio.Queue, stt_req_queue: asyncio.Queue):
+async def vad_processor_task(audio_in_queue: asyncio.Queue, stt_req_queue: asyncio.Queue, ws_out_queue: asyncio.Queue):
+    """Reads incoming audio, runs VAD, and chunks it for STT."""
     import copy
     local_vad_model = copy.deepcopy(vad_model)
     local_vad_model.reset_states()
@@ -129,6 +130,10 @@ async def vad_processor_task(audio_in_queue: asyncio.Queue, stt_req_queue: async
                 
                 if is_speaking and (reached_max_duration or reached_silence):
                     print(f"VAD chunking: Max Duration: {reached_max_duration}, Silence: {reached_silence}")
+                    
+                    # Notify frontend INSTANTLY that we caught the speech and are transcribing
+                    await ws_out_queue.put(("text", json.dumps({"type": "vad_triggered"})))
+                    
                     await stt_req_queue.put(bytes(speech_buffer))
                     speech_buffer = bytearray()
                     is_speaking = False
@@ -288,7 +293,7 @@ async def websocket_endpoint(websocket: WebSocket):
     ws_out_queue = asyncio.Queue()  # Unified: ("binary", bytes) or ("text", str)
     
     tasks = [
-        asyncio.create_task(vad_processor_task(audio_in_queue, stt_req_queue)),
+        asyncio.create_task(vad_processor_task(audio_in_queue, stt_req_queue, ws_out_queue)),
         asyncio.create_task(stt_client_task(stt_req_queue, llm_queue, ws_out_queue, stt_model)),
         asyncio.create_task(llm_processor_task(llm_queue, tts_req_queue, ws_out_queue)),
         asyncio.create_task(tts_client_task(tts_req_queue, ws_out_queue, tts_voice))

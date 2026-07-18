@@ -563,6 +563,10 @@ function connectWs() {
 
 function handleTranscript(msg) {
     switch (msg.type) {
+        case 'vad_triggered':
+            statusText.textContent = 'Processing speech...';
+            micBtn.classList.remove('recording');
+            break;
         case 'user':
             addUserMessage(msg.text);
             statusText.textContent = 'Coach is thinking…';
@@ -575,6 +579,7 @@ function handleTranscript(msg) {
         case 'ai_done':
             finaliseAiMessage();
             statusText.textContent = 'Listening... (Just start speaking)';
+            micBtn.classList.add('recording');
             break;
     }
 }
