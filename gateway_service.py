@@ -260,7 +260,12 @@ async def websocket_endpoint(websocket: WebSocket):
     
     # Read the first message as JSON config
     config_raw = await websocket.receive_text()
-    config = json.loads(config_raw)
+    try:
+        config = json.loads(config_raw)
+    except json.JSONDecodeError:
+        print(f"Malformed config received, closing connection.")
+        await websocket.close(code=1003, reason="Invalid JSON config")
+        return
     tts_voice = config.get("tts_voice", "en-US-JennyNeural")
     stt_model = config.get("stt_model", "distil-large-v3")
     print(f"Client config — Voice: {tts_voice} | STT: {stt_model}")

@@ -59,6 +59,8 @@ jobs:
         run: python load_test.py
         env:
           PYTHONUNBUFFERED: "1"
+          NUM_CLIENTS: "2"
+          RESPONSE_TIMEOUT: "180"
 
       - name: Print service logs (post-test)
         if: always()

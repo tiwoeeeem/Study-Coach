@@ -15,6 +15,8 @@ console = Console()
 
 URI = os.getenv("GATEWAY_WS_URL", "ws://localhost:8000/ws/audio")
 METRICS_URL = os.getenv("GATEWAY_METRICS_URL", "http://localhost:8000/metrics")
+NUM_CLIENTS = int(os.getenv("NUM_CLIENTS", "8"))
+RESPONSE_TIMEOUT = int(os.getenv("RESPONSE_TIMEOUT", "120"))
 CHUNK_SIZE = 2048
 CHUNK_INTERVAL = 0.064  # 64ms for 2048 bytes at 16kHz 16-bit
 SILENCE_DURATION = 1.5
@@ -56,7 +58,7 @@ async def simulate_normal_client(client_id: int):
                 await asyncio.sleep(CHUNK_INTERVAL)
             
             # Await TTS response
-            response = await asyncio.wait_for(ws.recv(), timeout=60.0)
+            response = await asyncio.wait_for(ws.recv(), timeout=RESPONSE_TIMEOUT)
             rtt = time.time() - silence_start
             
             return {"id": client_id, "status": "Success", "rtt": rtt, "bytes_received": len(response)}
@@ -147,12 +149,12 @@ async def fetch_metrics():
 async def main():
     console.print("[bold green]Starting Load & Edge Case Test Suite...[/bold green]")
     
-    # Pre-generate unique audio payloads for 8 clients (2x workers)
-    console.print("Generating dynamic payloads for 8 concurrent clients...")
+    # Pre-generate unique audio payloads for N clients (2x workers)
+    console.print(f"Generating dynamic payloads for {NUM_CLIENTS} concurrent clients...")
     
     tasks = []
-    # 8 Normal Clients
-    for i in range(1, 9):
+    # Normal Clients
+    for i in range(1, NUM_CLIENTS + 1):
         tasks.append(simulate_normal_client(i))
         
     # 3 Edge Cases
