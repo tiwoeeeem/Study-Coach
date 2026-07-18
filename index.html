@@ -574,7 +574,7 @@ function handleTranscript(msg) {
             break;
         case 'ai_done':
             finaliseAiMessage();
-            statusText.textContent = 'Your turn — tap the mic';
+            statusText.textContent = 'Listening... (Just start speaking)';
             break;
     }
 }
@@ -589,7 +589,7 @@ function setStatus(state) {
     };
     connLabel.textContent = labels[state] || state;
     if (state === 'connected') {
-        statusText.textContent = 'Ready — tap the mic to speak';
+        statusText.textContent = 'Ready — Listening automatically...';
     }
 }
 
