@@ -702,9 +702,13 @@ micBtn.addEventListener('click', async () => {
             });
         }
         try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusText.textContent = 'Error: Please use http://localhost:8000 (HTTPS is required for mics on IPs)';
+                return;
+            }
             await startRecording();
         } catch (err) {
-            statusText.textContent = 'Microphone access denied';
+            statusText.textContent = 'Microphone access denied. Check permissions.';
             console.error('Mic error:', err);
         }
     } else {
