@@ -52,7 +52,7 @@ TTS_VOICE = "en-IN-PrabhatNeural"
 # Start the worker with:  python stt_worker.py --models distil-large-v3 small.en
 #
 # Change this to any model from the list above:
-STT_MODEL = "small.en"
+STT_MODEL = "base.en"
 
 # Cooldown after playback stops before mic re-enables (seconds).
 # Prevents the mic from catching the tail echo of the last TTS chunk.
@@ -166,13 +166,29 @@ async def websocket_loop():
                 while not shutdown_event.is_set():
                     try:
                         data = await asyncio.wait_for(ws.recv(), timeout=0.5)
-                        speaker_queue.put(data, timeout=0.5)
+                        if isinstance(data, str):
+                            try:
+                                msg = json.loads(data)
+                                if msg["type"] == "vad_triggered":
+                                    print("\n[VAD] Silence detected. Processing speech...")
+                                elif msg["type"] == "user":
+                                    print(f"[You]: {msg['text']}")
+                                elif msg["type"] == "ai_delta":
+                                    # Print token inline without newline
+                                    sys.stdout.write(msg['text'])
+                                    sys.stdout.flush()
+                                elif msg["type"] == "ai_done":
+                                    print("\n[VAD] Listening...")
+                            except json.JSONDecodeError:
+                                pass
+                        else:
+                            speaker_queue.put(data, timeout=0.5)
                     except asyncio.TimeoutError:
                         continue
                     except queue.Full:
                         pass
                     except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError):
-                        print("Server closed connection.")
+                        print("\nServer closed connection.")
                         shutdown_event.set()
                         break
 
