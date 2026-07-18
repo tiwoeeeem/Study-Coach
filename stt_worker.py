@@ -53,8 +53,9 @@ def get_model(model_name: str, device: str, precision: str, num_workers: int) ->
     return model
 
 
-def process_audio(model: WhisperModel, audio_bytes: bytes) -> str:
-    """Blocking function to process audio. Runs in a thread pool."""
+def process_audio(model_name: str, args, audio_bytes: bytes) -> str:
+    """Blocking function to load model and process audio. Runs in a thread pool."""
+    model = get_model(model_name, args.device, args.precision, args.workers)
     audio_data = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
     segments, _ = model.transcribe(audio_data, beam_size=5, vad_filter=True)
     text = "".join([segment.text for segment in segments]).strip()
@@ -68,11 +69,8 @@ async def handle_request(socket: zmq.asyncio.Socket, client_id: bytes, empty: by
             await socket.send_multipart([client_id, empty, b""])
             return
 
-        # Load/get model
-        model = get_model(requested_model, args.device, args.precision, args.workers)
-
-        # Offload transcription to thread pool so the async loop isn't blocked
-        text = await asyncio.to_thread(process_audio, model, audio_bytes)
+        # Offload both model loading and transcription to thread pool so the async loop isn't blocked
+        text = await asyncio.to_thread(process_audio, requested_model, args, audio_bytes)
         
         if text:
             print(f"[{requested_model}] Transcribed: {text}")
