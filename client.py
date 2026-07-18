@@ -189,13 +189,43 @@ async def websocket_loop(tts_voice, stt_model):
 
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Study Coach Voice Client")
-    parser.add_argument("--voice", type=str, default=DEFAULT_TTS_VOICE,
-                        help="TTS Voice (e.g. en-US-JennyNeural, en-GB-SoniaNeural, en-IN-PrabhatNeural)")
-    parser.add_argument("--model", type=str, default=DEFAULT_STT_MODEL,
-                        help="STT Model (e.g. base.en, small.en, distil-large-v3)")
-    args = parser.parse_args()
+    import inquirer
+
+    questions = [
+        inquirer.List('model',
+            message="Select STT Model (smaller = faster, larger = more accurate)",
+            choices=[
+                'base.en',
+                'small.en',
+                'medium.en',
+                'distil-large-v3',
+                'large-v3'
+            ],
+            default='base.en'
+        ),
+        inquirer.List('voice',
+            message="Select TTS Voice",
+            choices=[
+                'en-US-JennyNeural (US Female)',
+                'en-US-GuyNeural (US Male)',
+                'en-US-AriaNeural (US Female)',
+                'en-GB-SoniaNeural (UK Female)',
+                'en-GB-RyanNeural (UK Male)',
+                'en-IN-NeerjaNeural (IN Female)',
+                'en-IN-PrabhatNeural (IN Male)'
+            ],
+            default='en-IN-PrabhatNeural (IN Male)'
+        )
+    ]
+    answers = inquirer.prompt(questions)
+    
+    if not answers:
+        print("Cancelled.")
+        return
+
+    # Extract just the ID from the voice choice (before the space)
+    selected_model = answers['model']
+    selected_voice = answers['voice'].split(' ')[0]
 
     def handle_signal(sig, frame):
         print("\nShutting down...")
@@ -223,7 +253,7 @@ def main():
     speaker.start()
 
     try:
-        asyncio.run(websocket_loop(args.voice, args.model))
+        asyncio.run(websocket_loop(selected_voice, selected_model))
     except KeyboardInterrupt:
         pass
     finally:
