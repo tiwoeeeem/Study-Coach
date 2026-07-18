@@ -47,6 +47,11 @@ app = FastAPI()
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
+@app.get("/", response_class=HTMLResponse)
+async def get_index():
+    with open("index.html", "r") as f:
+        return f.read()
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     with open("dashboard.html", "r") as f:
@@ -133,9 +138,10 @@ async def vad_processor_task(audio_in_queue: asyncio.Queue, stt_req_queue: async
         print(f"VAD Error: {e}")
         raise
 
-async def stt_client_task(stt_req_queue: asyncio.Queue, llm_queue: asyncio.Queue, stt_model: str):
+async def stt_client_task(stt_req_queue: asyncio.Queue, llm_queue: asyncio.Queue, ws_out_queue: asyncio.Queue, stt_model: str):
     """Sends audio over ZMQ to STT worker and receives transcribed text.
-    Forwards the client's model preference as a multi-part message [model, audio]."""
+    Forwards the client's model preference as a multi-part message [model, audio].
+    Emits transcript events to ws_out_queue for the frontend."""
     stt_socket = zmq_context.socket(zmq.REQ)
     stt_socket.connect(STT_WORKER_ADDR)
     
@@ -153,6 +159,7 @@ async def stt_client_task(stt_req_queue: asyncio.Queue, llm_queue: asyncio.Queue
             
             if text:
                 print(f"STT Gateway received: {text}")
+                await ws_out_queue.put(("text", json.dumps({"type": "user", "text": text})))
                 await llm_queue.put(text)
     except Exception as e:
         print(f"STT Client Task Error: {e}")
@@ -160,7 +167,7 @@ async def stt_client_task(stt_req_queue: asyncio.Queue, llm_queue: asyncio.Queue
     finally:
         stt_socket.close()
 
-async def llm_processor_task(llm_queue: asyncio.Queue, tts_req_queue: asyncio.Queue):
+async def llm_processor_task(llm_queue: asyncio.Queue, tts_req_queue: asyncio.Queue, ws_out_queue: asyncio.Queue):
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     
     try:
@@ -203,6 +210,9 @@ async def llm_processor_task(llm_queue: asyncio.Queue, tts_req_queue: asyncio.Qu
                     full_response += token
                     current_clause += token
                     
+                    # Stream each token to the frontend for live typing effect
+                    await ws_out_queue.put(("text", json.dumps({"type": "ai_delta", "text": token})))
+                    
                     match = re.search(r'([.!?]+)', current_clause)
                     if match:
                         split_idx = match.end()
@@ -219,13 +229,14 @@ async def llm_processor_task(llm_queue: asyncio.Queue, tts_req_queue: asyncio.Qu
                 print(f"LLM Clause (Final): {current_clause.strip()}")
                 await tts_req_queue.put(current_clause.strip())
                 
+            await ws_out_queue.put(("text", json.dumps({"type": "ai_done"})))
             messages.append({"role": "assistant", "content": full_response})
             
     except Exception as e:
         print(f"LLM Processor Error: {e}")
         raise
 
-async def tts_client_task(tts_req_queue: asyncio.Queue, audio_out_queue: asyncio.Queue, tts_voice: str):
+async def tts_client_task(tts_req_queue: asyncio.Queue, ws_out_queue: asyncio.Queue, tts_voice: str):
     """Sends text over ZMQ to TTS worker and receives synthesized audio bytes.
     Forwards the client's voice preference as a multi-part message [voice, text]."""
     tts_socket = zmq_context.socket(zmq.REQ)
@@ -246,7 +257,7 @@ async def tts_client_task(tts_req_queue: asyncio.Queue, audio_out_queue: asyncio
             if audio_bytes:
                 chunk_size = 4096
                 for i in range(0, len(audio_bytes), chunk_size):
-                    await audio_out_queue.put(audio_bytes[i:i+chunk_size])
+                    await ws_out_queue.put(("binary", audio_bytes[i:i+chunk_size]))
     except Exception as e:
         print(f"TTS Client Task Error: {e}")
         raise
@@ -274,13 +285,13 @@ async def websocket_endpoint(websocket: WebSocket):
     stt_req_queue = asyncio.Queue()
     llm_queue = asyncio.Queue()
     tts_req_queue = asyncio.Queue()
-    audio_out_queue = asyncio.Queue()
+    ws_out_queue = asyncio.Queue()  # Unified: ("binary", bytes) or ("text", str)
     
     tasks = [
         asyncio.create_task(vad_processor_task(audio_in_queue, stt_req_queue)),
-        asyncio.create_task(stt_client_task(stt_req_queue, llm_queue, stt_model)),
-        asyncio.create_task(llm_processor_task(llm_queue, tts_req_queue)),
-        asyncio.create_task(tts_client_task(tts_req_queue, audio_out_queue, tts_voice))
+        asyncio.create_task(stt_client_task(stt_req_queue, llm_queue, ws_out_queue, stt_model)),
+        asyncio.create_task(llm_processor_task(llm_queue, tts_req_queue, ws_out_queue)),
+        asyncio.create_task(tts_client_task(tts_req_queue, ws_out_queue, tts_voice))
     ]
     
     async def receiver():
@@ -293,10 +304,14 @@ async def websocket_endpoint(websocket: WebSocket):
             await audio_in_queue.put(None)
             
     async def sender():
+        """Dispatches both binary audio and text transcript messages."""
         try:
             while True:
-                data = await audio_out_queue.get()
-                await websocket.send_bytes(data)
+                msg_type, data = await ws_out_queue.get()
+                if msg_type == "binary":
+                    await websocket.send_bytes(data)
+                else:
+                    await websocket.send_text(data)
         except Exception as e:
             print(f"Sender error: {e}")
             

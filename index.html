@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Coach — Voice AI</title>
+    <meta name="description" content="An AI-powered voice study coach that helps you learn through conversation.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #08090d;
+            --bg-card: rgba(255,255,255,0.04);
+            --border-glass: rgba(255,255,255,0.08);
+            --text-primary: #f0f0f5;
+            --text-secondary: rgba(240,240,245,0.55);
+            --accent-blue: #3b82f6;
+            --accent-violet: #8b5cf6;
+            --accent-red: #ef4444;
+            --accent-green: #22c55e;
+            --user-bubble: rgba(59,130,246,0.12);
+            --ai-bubble: rgba(139,92,246,0.10);
+            --radius-lg: 20px;
+            --radius-md: 14px;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* Animated gradient mesh background */
+        .bg-mesh {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background:
+                radial-gradient(ellipse 60% 50% at 15% 85%, rgba(59,130,246,0.12) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 60% at 85% 15%, rgba(139,92,246,0.10) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 40% at 50% 50%, rgba(59,130,246,0.04) 0%, transparent 60%);
+            animation: meshShift 20s ease-in-out infinite alternate;
+        }
+        @keyframes meshShift {
+            0%   { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(25deg); }
+        }
+
+        /* Layout */
+        .app {
+            position: relative; z-index: 1;
+            display: flex; flex-direction: column;
+            height: 100vh; max-width: 640px;
+            margin: 0 auto; padding: 0 16px;
+        }
+
+        /* Header */
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 4px 12px;
+            flex-shrink: 0;
+        }
+        .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 1.15rem; font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+        .logo-icon {
+            width: 34px; height: 34px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
+            display: grid; place-items: center; font-size: 1rem;
+        }
+
+        .connection-badge {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.75rem; font-weight: 500;
+            color: var(--text-secondary);
+            padding: 5px 12px;
+            border-radius: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+        }
+        .connection-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #6b7280;
+            transition: background 0.4s;
+        }
+        .connection-badge.connected .connection-dot { background: var(--accent-green); }
+        .connection-badge.connected { color: var(--accent-green); }
+        .connection-badge.error .connection-dot { background: var(--accent-red); }
+        .connection-badge.error { color: var(--accent-red); }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1; overflow-y: auto;
+            padding: 8px 0 16px;
+            display: flex; flex-direction: column; gap: 12px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.08) transparent;
+            mask-image: linear-gradient(to bottom, transparent 0%, black 3%, black 97%, transparent 100%);
+        }
+        .chat-area::-webkit-scrollbar { width: 4px; }
+        .chat-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        .message {
+            max-width: 88%;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            line-height: 1.55;
+            animation: msgIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+            word-wrap: break-word;
+        }
+        @keyframes msgIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .message.user {
+            align-self: flex-end;
+            background: var(--user-bubble);
+            border: 1px solid rgba(59,130,246,0.15);
+            color: #c4d9f8;
+        }
+        .message.ai {
+            align-self: flex-start;
+            background: var(--ai-bubble);
+            border: 1px solid rgba(139,92,246,0.12);
+            color: #d4c8f0;
+        }
+        .message .label {
+            font-size: 0.7rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin-bottom: 4px; opacity: 0.5;
+        }
+
+        .empty-state {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            text-align: center; gap: 12px; opacity: 0.4;
+        }
+        .empty-state .icon { font-size: 2.5rem; }
+        .empty-state p { font-size: 0.9rem; line-height: 1.5; max-width: 280px; }
+
+        /* Typing indicator */
+        .typing-dots { display: inline-flex; gap: 4px; padding: 4px 0; }
+        .typing-dots span {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: rgba(139,92,246,0.5);
+            animation: blink 1.4s infinite both;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink {
+            0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Controls Area */
+        .controls-area {
+            flex-shrink: 0;
+            padding: 12px 0 24px;
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
+        }
+
+        /* Waveform */
+        .waveform-wrap {
+            width: 100%; height: 48px;
+            border-radius: var(--radius-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+        }
+        .waveform-wrap canvas { width: 100%; height: 100%; display: block; }
+
+        /* Mic Button */
+        .mic-row {
+            display: flex; align-items: center; gap: 16px;
+        }
+        .mic-btn {
+            width: 72px; height: 72px;
+            border-radius: 50%; border: none; cursor: pointer;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
+            color: white; font-size: 1.6rem;
+            display: grid; place-items: center;
+            transition: transform 0.2s, box-shadow 0.3s;
+            box-shadow: 0 4px 30px rgba(59,130,246,0.25);
+            position: relative;
+        }
+        .mic-btn:hover { transform: scale(1.06); }
+        .mic-btn:active { transform: scale(0.96); }
+        .mic-btn.recording {
+            background: linear-gradient(135deg, var(--accent-red), #f97316);
+            box-shadow: 0 4px 40px rgba(239,68,68,0.35);
+            animation: pulse 1.8s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.07); }
+        }
+        .mic-btn.disabled {
+            opacity: 0.4; pointer-events: none;
+        }
+
+        /* Ripple ring behind mic */
+        .mic-ring {
+            position: absolute;
+            width: 72px; height: 72px; border-radius: 50%;
+            border: 2px solid rgba(239,68,68,0.3);
+            animation: ring-expand 1.8s ease-out infinite;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .mic-btn.recording .mic-ring { opacity: 1; }
+        @keyframes ring-expand {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        /* Settings row */
+        .settings-row {
+            display: flex; gap: 10px; width: 100%;
+        }
+        .setting-group {
+            flex: 1; display: flex; flex-direction: column; gap: 4px;
+        }
+        .setting-group label {
+            font-size: 0.68rem; font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+        .setting-group select {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            color: var(--text-primary);
+            font-family: inherit; font-size: 0.8rem;
+            padding: 8px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+        .setting-group select:focus { outline: 1px solid var(--accent-blue); }
+
+        /* Status bar */
+        .status-text {
+            font-size: 0.75rem; color: var(--text-secondary);
+            text-align: center; min-height: 18px;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .app { padding: 0 10px; }
+            .mic-btn { width: 64px; height: 64px; font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-mesh"></div>
+
+    <div class="app">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🎓</div>
+                <span>Study Coach</span>
+            </div>
+            <div class="connection-badge" id="connBadge">
+                <div class="connection-dot"></div>
+                <span id="connLabel">Disconnected</span>
+            </div>
+        </header>
+
+        <div class="chat-area" id="chatArea">
+            <div class="empty-state" id="emptyState">
+                <div class="icon">🎙️</div>
+                <p>Tap the microphone and ask a study question. Your AI coach will respond by voice.</p>
+            </div>
+        </div>
+
+        <div class="controls-area">
+            <div class="waveform-wrap">
+                <canvas id="waveform"></canvas>
+            </div>
+
+            <div class="status-text" id="statusText">Press the mic to start</div>
+
+            <div class="mic-row">
+                <button class="mic-btn disabled" id="micBtn" aria-label="Toggle microphone">
+                    <div class="mic-ring"></div>
+                    🎤
+                </button>
+            </div>
+
+            <div class="settings-row">
+                <div class="setting-group">
+                    <label for="voiceSelect">Voice</label>
+                    <select id="voiceSelect">
+                        <option value="en-US-JennyNeural">Jenny (US)</option>
+                        <option value="en-US-GuyNeural">Guy (US)</option>
+                        <option value="en-US-AriaNeural">Aria (US)</option>
+                        <option value="en-GB-SoniaNeural">Sonia (UK)</option>
+                        <option value="en-IN-NeerjaNeural">Neerja (IN)</option>
+                        <option value="en-IN-PrabhatNeural">Prabhat (IN)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="modelSelect">STT Model</label>
+                    <select id="modelSelect">
+                        <option value="distil-large-v3">Distil Large v3</option>
+                        <option value="large-v3">Large v3</option>
+                        <option value="medium.en">Medium (EN)</option>
+                        <option value="small.en">Small (EN)</option>
+                        <option value="base.en">Base (EN)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────
+let ws = null;
+let audioCtx = null;
+let micStream = null;
+let scriptProcessor = null;
+let micSource = null;
+let isRecording = false;
+let isPlaying = false;
+let nextPlayTime = 0;
+let activeSourceNodes = [];
+
+const SAMPLE_RATE_IN  = 16000;
+const SAMPLE_RATE_OUT = 24000;
+const CHUNK_BYTES     = 2048;   // send 2048 bytes per WS frame
+
+// ─── DOM refs ────────────────────────────────────────────────────
+const micBtn      = document.getElementById('micBtn');
+const chatArea    = document.getElementById('chatArea');
+const emptyState  = document.getElementById('emptyState');
+const connBadge   = document.getElementById('connBadge');
+const connLabel   = document.getElementById('connLabel');
+const statusText  = document.getElementById('statusText');
+const waveCanvas  = document.getElementById('waveform');
+const voiceSelect = document.getElementById('voiceSelect');
+const modelSelect = document.getElementById('modelSelect');
+
+// ─── Waveform Visualiser ─────────────────────────────────────────
+const wCtx = waveCanvas.getContext('2d');
+let analyser = null;
+let waveAnimId = null;
+
+function initWaveform() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = waveCanvas.getBoundingClientRect();
+    waveCanvas.width  = rect.width * dpr;
+    waveCanvas.height = rect.height * dpr;
+    wCtx.scale(dpr, dpr);
+}
+
+function drawWaveform() {
+    const w = waveCanvas.getBoundingClientRect().width;
+    const h = waveCanvas.getBoundingClientRect().height;
+    wCtx.clearRect(0, 0, w, h);
+
+    if (!analyser) {
+        drawIdleLine(w, h);
+        waveAnimId = requestAnimationFrame(drawWaveform);
+        return;
+    }
+
+    const bufLen = analyser.frequencyBinCount;
+    const data = new Uint8Array(bufLen);
+    analyser.getByteTimeDomainData(data);
+
+    wCtx.lineWidth = 2;
+    wCtx.strokeStyle = isRecording
+        ? 'rgba(239, 68, 68, 0.7)'
+        : isPlaying
+            ? 'rgba(139, 92, 246, 0.7)'
+            : 'rgba(59, 130, 246, 0.35)';
+    wCtx.beginPath();
+
+    const sliceW = w / bufLen;
+    let x = 0;
+    for (let i = 0; i < bufLen; i++) {
+        const v = data[i] / 128.0;
+        const y = (v * h) / 2;
+        i === 0 ? wCtx.moveTo(x, y) : wCtx.lineTo(x, y);
+        x += sliceW;
+    }
+    wCtx.lineTo(w, h / 2);
+    wCtx.stroke();
+
+    waveAnimId = requestAnimationFrame(drawWaveform);
+}
+
+function drawIdleLine(w, h) {
+    wCtx.strokeStyle = 'rgba(59, 130, 246, 0.15)';
+    wCtx.lineWidth = 1.5;
+    wCtx.beginPath();
+    const time = performance.now() / 1000;
+    for (let x = 0; x < w; x++) {
+        const y = h / 2 + Math.sin(x * 0.04 + time * 1.5) * 3;
+        x === 0 ? wCtx.moveTo(x, y) : wCtx.lineTo(x, y);
+    }
+    wCtx.stroke();
+}
+
+// ─── Audio helpers ───────────────────────────────────────────────
+function downsample(inputBuffer, inputRate, outputRate) {
+    if (inputRate === outputRate) return inputBuffer;
+    const ratio = inputRate / outputRate;
+    const outLen = Math.floor(inputBuffer.length / ratio);
+    const out = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+        const srcIdx = i * ratio;
+        const lo = Math.floor(srcIdx);
+        const hi = Math.min(lo + 1, inputBuffer.length - 1);
+        const frac = srcIdx - lo;
+        out[i] = inputBuffer[lo] * (1 - frac) + inputBuffer[hi] * frac;
+    }
+    return out;
+}
+
+function float32ToInt16(float32) {
+    const int16 = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32[i]));
+        int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return int16;
+}
+
+function int16ToFloat32(int16) {
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0;
+    }
+    return float32;
+}
+
+// ─── Playback ────────────────────────────────────────────────────
+function playPcmChunk(arrayBuffer) {
+    if (!audioCtx) return;
+    const int16 = new Int16Array(arrayBuffer);
+    const float32 = int16ToFloat32(int16);
+
+    const buffer = audioCtx.createBuffer(1, float32.length, SAMPLE_RATE_OUT);
+    buffer.getChannelData(0).set(float32);
+
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    if (nextPlayTime < now) nextPlayTime = now + 0.05;
+
+    source.start(nextPlayTime);
+    isPlaying = true;
+    activeSourceNodes.push(source);
+
+    source.onended = () => {
+        activeSourceNodes = activeSourceNodes.filter(n => n !== source);
+        if (activeSourceNodes.length === 0) {
+            isPlaying = false;
+        }
+    };
+
+    nextPlayTime += buffer.duration;
+}
+
+// ─── Chat UI ─────────────────────────────────────────────────────
+let currentAiMessage = null;
+
+function hideEmptyState() {
+    if (emptyState) emptyState.style.display = 'none';
+}
+
+function addUserMessage(text) {
+    hideEmptyState();
+    const div = document.createElement('div');
+    div.className = 'message user';
+    div.innerHTML = `<div class="label">You</div>${escapeHtml(text)}`;
+    chatArea.appendChild(div);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function startAiMessage() {
+    hideEmptyState();
+    const div = document.createElement('div');
+    div.className = 'message ai';
+    div.innerHTML = `<div class="label">Coach</div><span class="ai-text"></span><div class="typing-dots"><span></span><span></span><span></span></div>`;
+    chatArea.appendChild(div);
+    chatArea.scrollTop = chatArea.scrollHeight;
+    currentAiMessage = div;
+}
+
+function appendAiDelta(delta) {
+    if (!currentAiMessage) startAiMessage();
+    const span = currentAiMessage.querySelector('.ai-text');
+    if (span) span.textContent += delta;
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function finaliseAiMessage() {
+    if (!currentAiMessage) return;
+    const dots = currentAiMessage.querySelector('.typing-dots');
+    if (dots) dots.remove();
+    currentAiMessage = null;
+}
+
+function escapeHtml(t) {
+    const d = document.createElement('div');
+    d.textContent = t;
+    return d.innerHTML;
+}
+
+// ─── WebSocket ───────────────────────────────────────────────────
+function connectWs() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws/audio`);
+    ws.binaryType = 'arraybuffer';
+
+    setStatus('connecting');
+
+    ws.onopen = () => {
+        // Send config as first message
+        const config = {
+            tts_voice: voiceSelect.value,
+            stt_model: modelSelect.value
+        };
+        ws.send(JSON.stringify(config));
+        setStatus('connected');
+        micBtn.classList.remove('disabled');
+    };
+
+    ws.onmessage = (evt) => {
+        if (typeof evt.data === 'string') {
+            // Text message — transcript event
+            try {
+                const msg = JSON.parse(evt.data);
+                handleTranscript(msg);
+            } catch (e) { /* ignore */ }
+        } else {
+            // Binary — TTS audio
+            playPcmChunk(evt.data);
+        }
+    };
+
+    ws.onclose = () => {
+        setStatus('disconnected');
+        micBtn.classList.add('disabled');
+        if (isRecording) stopRecording();
+    };
+
+    ws.onerror = () => {
+        setStatus('error');
+    };
+}
+
+function handleTranscript(msg) {
+    switch (msg.type) {
+        case 'user':
+            addUserMessage(msg.text);
+            statusText.textContent = 'Coach is thinking…';
+            break;
+        case 'ai_delta':
+            if (!currentAiMessage) startAiMessage();
+            appendAiDelta(msg.text);
+            statusText.textContent = 'Coach is speaking…';
+            break;
+        case 'ai_done':
+            finaliseAiMessage();
+            statusText.textContent = 'Your turn — tap the mic';
+            break;
+    }
+}
+
+function setStatus(state) {
+    connBadge.className = 'connection-badge ' + state;
+    const labels = {
+        connecting: 'Connecting…',
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        error: 'Error'
+    };
+    connLabel.textContent = labels[state] || state;
+    if (state === 'connected') {
+        statusText.textContent = 'Ready — tap the mic to speak';
+    }
+}
+
+// ─── Mic capture ─────────────────────────────────────────────────
+let sendBuffer = new Float32Array(0);
+
+async function startRecording() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+    }
+
+    // Resume context (required after user gesture)
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
+    });
+
+    micSource = audioCtx.createMediaStreamSource(micStream);
+    scriptProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+    micSource.connect(analyser);
+    micSource.connect(scriptProcessor);
+    scriptProcessor.connect(audioCtx.destination); // Required for processing
+
+    const nativeSr = audioCtx.sampleRate;
+    const targetSamples = CHUNK_BYTES / 2; // int16 = 2 bytes per sample
+
+    scriptProcessor.onaudioprocess = (e) => {
+        if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
+        // Skip sending while TTS is playing (echo cancellation)
+        if (isPlaying) return;
+
+        const input = e.inputBuffer.getChannelData(0);
+        const downsampled = downsample(input, nativeSr, SAMPLE_RATE_IN);
+
+        // Append to send buffer
+        const merged = new Float32Array(sendBuffer.length + downsampled.length);
+        merged.set(sendBuffer);
+        merged.set(downsampled, sendBuffer.length);
+        sendBuffer = merged;
+
+        // Send in fixed-size chunks
+        while (sendBuffer.length >= targetSamples) {
+            const chunk = sendBuffer.slice(0, targetSamples);
+            sendBuffer = sendBuffer.slice(targetSamples);
+            const int16 = float32ToInt16(chunk);
+            ws.send(int16.buffer);
+        }
+    };
+
+    isRecording = true;
+    micBtn.classList.add('recording');
+    statusText.textContent = 'Listening…';
+}
+
+function stopRecording() {
+    isRecording = false;
+    micBtn.classList.remove('recording');
+
+    if (scriptProcessor) {
+        scriptProcessor.disconnect();
+        scriptProcessor = null;
+    }
+    if (micSource) {
+        micSource.disconnect();
+        micSource = null;
+    }
+    if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+    }
+    sendBuffer = new Float32Array(0);
+
+    // Send a burst of silence to trigger VAD end-of-speech
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        const silenceChunks = 25; // ~1.6s of silence at 64ms per chunk
+        const silence = new ArrayBuffer(CHUNK_BYTES);
+        for (let i = 0; i < silenceChunks; i++) {
+            ws.send(silence);
+        }
+    }
+    statusText.textContent = 'Processing…';
+}
+
+// ─── Mic button toggle ──────────────────────────────────────────
+micBtn.addEventListener('click', async () => {
+    if (micBtn.classList.contains('disabled')) return;
+
+    if (!isRecording) {
+        // Stop any currently playing audio
+        activeSourceNodes.forEach(n => { try { n.stop(); } catch(e){} });
+        activeSourceNodes = [];
+        isPlaying = false;
+        nextPlayTime = 0;
+
+        // Need a fresh WebSocket connection for each conversation turn
+        // because the server closes after responding
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            connectWs();
+            // Wait for open
+            await new Promise((resolve) => {
+                const checkOpen = setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        clearInterval(checkOpen);
+                        resolve();
+                    }
+                }, 50);
+                setTimeout(() => { clearInterval(checkOpen); resolve(); }, 3000);
+            });
+        }
+        try {
+            await startRecording();
+        } catch (err) {
+            statusText.textContent = 'Microphone access denied';
+            console.error('Mic error:', err);
+        }
+    } else {
+        stopRecording();
+    }
+});
+
+// ─── Init ────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+    initWaveform();
+    drawWaveform();
+});
+window.addEventListener('resize', initWaveform);
+</script>
+</body>
+</html>
