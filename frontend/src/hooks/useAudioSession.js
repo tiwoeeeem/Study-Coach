@@ -225,6 +225,13 @@ export default function useAudioSession() {
       const targetSamples = CHUNK_BYTES / 2;
 
       scriptProc.onaudioprocess = (e) => {
+        // Explicitly zero out the output buffer to prevent Safari/iOS from looping the mic back
+        if (e.outputBuffer) {
+          for (let i = 0; i < e.outputBuffer.numberOfChannels; i++) {
+            e.outputBuffer.getChannelData(i).fill(0);
+          }
+        }
+
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         // Echo cancellation gate: drop mic frames while TTS is playing + cooldown
