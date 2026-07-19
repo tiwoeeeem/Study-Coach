@@ -174,6 +174,9 @@ async def stt_client_task(stt_req_queue: asyncio.Queue, llm_queue: asyncio.Queue
                 print(f"STT Gateway received: {text}")
                 await ws_out_queue.put(("text", json.dumps({"type": "user", "text": text})))
                 await llm_queue.put(text)
+            else:
+                # If STT failed to transcribe anything (noise/cough), reset the frontend UI back to listening
+                await ws_out_queue.put(("text", json.dumps({"type": "ai_done"})))
     except Exception as e:
         print(f"STT Client Task Error: {e}")
         raise
