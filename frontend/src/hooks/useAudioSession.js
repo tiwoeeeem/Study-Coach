@@ -74,8 +74,11 @@ export default function useAudioSession() {
 
     const source = ctx.createBufferSource();
     source.buffer = buffer;
+    
+    // Connect to analyser for the visualizer (dead end)
     source.connect(analyser);
-    analyser.connect(ctx.destination);
+    // Connect directly to destination for playback
+    source.connect(ctx.destination);
 
     const now = ctx.currentTime;
     if (nextPlayTimeRef.current < now) {
