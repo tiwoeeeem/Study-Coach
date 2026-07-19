@@ -59,6 +59,7 @@ export default function useAudioSession() {
   const nextPlayTimeRef = useRef(0);
   const activeSourcesRef = useRef([]);
   const currentAiTextRef = useRef('');
+  const masterGainRef = useRef(null);
 
   // ─── Playback (mirrors speaker_thread_fn) ───
   const playPcmChunk = useCallback((arrayBuffer) => {
@@ -77,8 +78,12 @@ export default function useAudioSession() {
     
     // Connect to analyser for the visualizer (dead end)
     source.connect(analyser);
-    // Connect directly to destination for playback
-    source.connect(ctx.destination);
+    // Connect to master gain for playback
+    if (masterGainRef.current) {
+      source.connect(masterGainRef.current);
+    } else {
+      source.connect(ctx.destination);
+    }
 
     const now = ctx.currentTime;
     if (nextPlayTimeRef.current < now) {
@@ -87,6 +92,7 @@ export default function useAudioSession() {
 
     source.start(nextPlayTimeRef.current);
     isPlayingRef.current = true;
+    if (masterGainRef.current) masterGainRef.current.gain.value = 1;
     setPipeline('speaking');
     activeSourcesRef.current.push(source);
 
@@ -94,6 +100,7 @@ export default function useAudioSession() {
       activeSourcesRef.current = activeSourcesRef.current.filter(n => n !== source);
       if (activeSourcesRef.current.length === 0) {
         isPlayingRef.current = false;
+        if (masterGainRef.current) masterGainRef.current.gain.value = 0;
         lastPlayTimeRef.current = performance.now();
         setPipeline('listening');
       }
@@ -149,11 +156,18 @@ export default function useAudioSession() {
     currentAiTextRef.current = '';
 
     // Audio context
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: SAMPLE_RATE_IN
+    });
     audioCtxRef.current = ctx;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
     analyserRef.current = analyser;
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0; // completely mute speakers while in listening mode
+    masterGain.connect(ctx.destination);
+    masterGainRef.current = masterGain;
 
     if (ctx.state === 'suspended') await ctx.resume();
 
