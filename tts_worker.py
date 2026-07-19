@@ -68,8 +68,10 @@ async def main_async():
     context = zmq.asyncio.Context()
     socket = context.socket(zmq.ROUTER)
     socket.bind("tcp://*:5556")
-    print("TTS Worker listening on tcp://*:5556")
-    print("Concurrency: Unbounded asyncio tasks for network-bound TTS.")
+    print(f"TTS Worker (ROUTER) listening on tcp://*:5556")
+    print("Voices will be synthesized dynamically.\n")
+
+    background_tasks = set()
 
     while True:
         try:
@@ -88,7 +90,9 @@ async def main_async():
                 text = parts[2].decode() if len(parts) > 2 else ""
 
             # Dispatch background task immediately
-            asyncio.create_task(handle_request(socket, client_id, empty, voice, text))
+            task = asyncio.create_task(handle_request(socket, client_id, empty, voice, text))
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
 
         except Exception as e:
             print(f"Router Error: {e}")

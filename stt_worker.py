@@ -94,6 +94,8 @@ async def main_async():
     print(f"Concurrency: Up to {args.workers} concurrent requests will be batched.")
     print("Models will be loaded on-demand as clients request them.\n")
 
+    background_tasks = set()
+
     while True:
         try:
             # Receive multi-part message from ROUTER:
@@ -114,7 +116,9 @@ async def main_async():
                 audio_bytes = parts[2] if len(parts) > 2 else b""
 
             # Dispatch background task immediately
-            asyncio.create_task(handle_request(socket, client_id, empty, requested_model, audio_bytes, args))
+            task = asyncio.create_task(handle_request(socket, client_id, empty, requested_model, audio_bytes, args))
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
 
         except Exception as e:
             print(f"Router Error: {e}")

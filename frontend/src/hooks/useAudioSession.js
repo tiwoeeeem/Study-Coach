@@ -199,7 +199,13 @@ export default function useAudioSession() {
 
       micSource.connect(analyser);
       micSource.connect(scriptProc);
-      scriptProc.connect(ctx.destination);
+      
+      // Connect scriptProc to destination through a muted gain node
+      // to keep the audio graph running without echoing the mic to the speakers.
+      const dummyGain = ctx.createGain();
+      dummyGain.gain.value = 0;
+      scriptProc.connect(dummyGain);
+      dummyGain.connect(ctx.destination);
 
       const nativeSr = ctx.sampleRate;
       const targetSamples = CHUNK_BYTES / 2;
