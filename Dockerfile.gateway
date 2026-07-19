@@ -1,3 +1,13 @@
+# ─── Stage 1: Build React frontend ───
+FROM node:20-slim AS frontend-build
+
+WORKDIR /build
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+# ─── Stage 2: Python gateway ───
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -12,8 +22,10 @@ RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pyt
     pip install --no-cache-dir -r requirements.gateway.txt
 
 COPY gateway_service.py .
-COPY index.html .
 COPY dashboard.html .
+
+# Copy built React app
+COPY --from=frontend-build /build/dist ./frontend_dist/
 
 EXPOSE 8000
 

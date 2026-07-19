@@ -19,3 +19,8 @@ __pycache__/
 # Docker
 docker-compose.override.yml
 *.tar
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend_dist/

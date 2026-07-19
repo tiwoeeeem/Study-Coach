@@ -7,7 +7,8 @@ import numpy as np
 import torch
 import zmq.asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from groq import AsyncGroq
 from prometheus_client import make_asgi_app, Histogram
 
@@ -47,10 +48,17 @@ app = FastAPI()
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
+# Serve React frontend build assets
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend_dist")
+if os.path.isdir(os.path.join(FRONTEND_DIR, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
+
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
-    with open("index.html", "r") as f:
-        return f.read()
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return HTMLResponse("<h1>Frontend not built. Run: cd frontend && npm run build</h1>", status_code=503)
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
