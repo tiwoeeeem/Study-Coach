@@ -102,11 +102,9 @@ python load_test.py
 
 ## 📊 Metrics
 
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
-┃ Pipeline Stage ┃ Average Latency ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
-│ VAD Chunking Latency │ 4.5 ms │
-│ STT Transcription Round Trip │ 7.94 s │
-│ LLM Time-To-First-Token (TTFT) │ 17 ms │
-│ TTS Generation Round Trip │ 1.11 s │
-└────────────────────────────────┴─────────────────┘
+| Pipeline Stage | Average Latency |
+|---|---|
+| **VAD Chunking Latency** | 4.5 ms |
+| **STT Transcription Round Trip** | 7.94 s |
+| **LLM Time-To-First-Token (TTFT)** | 17 ms |
+| **TTS Generation Round Trip** | 1.11 s |
